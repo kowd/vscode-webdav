@@ -16,7 +16,7 @@
     ],
     "activationEvents": [
         "onFileSystem:webdav",
-        "onFileSystemAccess:webdav",
+        "onFileSystem:webdavs",
         "onCommand:extension.remote.webdav.open"
     ],
     "main": "./out/main",
