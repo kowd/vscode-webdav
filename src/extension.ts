@@ -1,8 +1,7 @@
 import Moment from 'moment';
 import * as vscode from 'vscode';
-import * as WebDAV from 'webdav-client';
-import { promisify } from 'util';
-import { ConnectionReaddirComplexResult, ConnectionReaddirOptions, ContentType, Properties } from 'webdav-client';
+import * as client from 'webdav';
+import { FileStat } from 'webdav';
 
 let outputChannel: vscode.OutputChannel;
 
@@ -99,32 +98,31 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
 
     public async copy(source: vscode.Uri, destination: vscode.Uri, options: { overwrite: boolean }): Promise<void> {
         return await this.forConnection("copy", source, async webdav => {
-            return await promisify<string, string, boolean>(webdav.copy).bind(webdav)(toWebDAVPath(source), toWebDAVPath(destination), options.overwrite)
+            return await webdav.copyFile(toWebDAVPath(source), toWebDAVPath(destination))
         })
     }
 
     public async createDirectory(uri: vscode.Uri): Promise<void> {
         return await this.forConnection("createDirectory", uri, async webdav => {
-            let path = toWebDAVPath(uri)
-            return await promisify(webdav.mkdir).bind(webdav)(path)
+            return await webdav.createDirectory(toWebDAVPath(uri))
         })
     }
 
     public async delete(uri: vscode.Uri, options: { recursive: boolean }): Promise<void> {
         return await this.forConnection("delete", uri, async webdav => {
-            return await promisify(webdav.delete).bind(webdav)(toWebDAVPath(uri))
+            return await webdav.deleteFile(toWebDAVPath(uri))
         })
     }
 
-    private async forConnection<T>(operation:string, uri: vscode.Uri, action: (webdav:WebDAV.Connection) => Promise<T>): Promise<T>
+    private async forConnection<T>(operation:string, uri: vscode.Uri, action: (webdav:client.WebDAVClient) => Promise<T>): Promise<T>
     {
         log(`${operation}: ${uri}`)
         try {
             let baseUri = vscode.Uri.parse(uri.toString().replace(/^webdav/i, "http")).with({path:"", fragment:"", query:""}).toString()
-            let webdav = new WebDAV.Connection(baseUri);
+            let webdav = client.createClient(baseUri);
             return await action(webdav)
         } catch (e) {
-            switch(e.statusCode) {
+            switch(e.status) {
                 case 404: throw vscode.FileSystemError.FileNotFound(uri)
                 case 403: throw vscode.FileSystemError.NoPermissions(uri)
             }
@@ -134,48 +132,38 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     
     public async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
         return await this.forConnection("readDirectory", uri, async webdav => {
-            let options: ConnectionReaddirOptions = { extraProperties: [], properties: true }
-            let readdir = promisify<string, ConnectionReaddirOptions, string[] | ConnectionReaddirComplexResult[]>(webdav.readdir).bind(webdav)
-
-            // We know the result is a ConnectionReaddirComplexResult because of properties: true above.
-            let path = toWebDAVPath(uri)
-            let results = await readdir(path, options) as ConnectionReaddirComplexResult[]
-
-            return results.map(r => [r.name, r.isDirectory ? vscode.FileType.Directory : vscode.FileType.File])
+            let results = await webdav.getDirectoryContents(toWebDAVPath(uri)) as client.FileStat[]
+            return results.map(r => [r.basename, r.type == 'directory' ? vscode.FileType.Directory : vscode.FileType.File])
         })
     }
 
     public async readFile(uri: vscode.Uri): Promise<Uint8Array> {
         return await this.forConnection("readFile", uri, async webdav => {
-            let body = await promisify<string, ContentType>(webdav.get).bind(webdav)(toWebDAVPath(uri))
+            let body = await webdav.getFileContents(toWebDAVPath(uri))
             if (typeof body === "string") {
                 return Buffer.from(body, 'binary')
+            } else if (Buffer.isBuffer(body)) {
+                return body
+            } else {
+                throw Error("TODO:")
             }
-            return body
         })
     }
 
     public async rename(oldUri: vscode.Uri, newUri: vscode.Uri, options: { overwrite: boolean }): Promise<void> {
         return await this.forConnection("rename", oldUri, async webdav => {
-            let move = promisify<string, string, boolean>(webdav.move).bind(webdav)
-            await move(toWebDAVPath(oldUri), toWebDAVPath(newUri), options.overwrite)
+            await webdav.moveFile(toWebDAVPath(oldUri), toWebDAVPath(newUri))
         })
     }
 
     public async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
         return await this.forConnection("stat", uri, async webdav => {
-            let result = await promisify<string, Properties>(webdav.getProperties).bind(webdav)(toWebDAVPath(uri))
-            let props = {}
-            for(let key in result) {
-                // This is terrible, potentially implementations can exclude the namespace ? 
-                props[key.split(":")[1].toLowerCase()] = result[key] 
-            }
-
+            let props = await webdav.stat(toWebDAVPath(uri)) as FileStat
             return {
-                ctime: Moment(props['creationdate'] as string).utc().unix(),
-                mtime: Moment(props['getlastmodified'] as string).utc().unix(),
-                size: parseInt(props['getcontentlength'] as string || '0'),
-                type: ((props['resourcetype'] || {}).content as { name: string }[] || []).findIndex(x => x.name && x.name.endsWith(':collection')) == -1 ? vscode.FileType.File : vscode.FileType.Directory,
+                ctime: Moment(props.lastmod).utc().unix(),
+                mtime: Moment(props.lastmod).utc().unix(),
+                size: props.size,
+                type: props.type === 'file' ? vscode.FileType.File : vscode.FileType.Directory,
             };
         })
     }
@@ -187,10 +175,7 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     public async writeFile(uri: vscode.Uri, content: Uint8Array, options: {create: boolean, overwrite: boolean}): Promise<void> {
         return await this.forConnection("stat", uri, async webdav => {
             await this.throwIfWriteFileIsNotAllowed(uri, options);
-
-            let put = promisify<string, ContentType, void>(webdav.put).bind(webdav)
-            let payload: ContentType = Buffer.from(content)
-            await put(toWebDAVPath(uri), payload)
+            await webdav.putFileContents(toWebDAVPath(uri), content, {overwrite: options.overwrite})
         })
     }
 

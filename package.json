@@ -65,6 +65,6 @@
     "dependencies": {
         "moment": "^2.29.4",
         "moment-timezone": "^0.5.40",
-        "webdav-client": "^1.4.3"
+        "webdav": "^4.11.2"
     }
 }
