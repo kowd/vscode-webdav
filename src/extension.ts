@@ -160,6 +160,7 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     }
 
     public async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
+        log(`stat: ${uri}`)
         if ('/' === normalizePath(uri.path)) {
             return {
                 type: vscode.FileType.Directory,
@@ -170,13 +171,18 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
         }
 
         let webdav = await this.openConnection(uri)
-        let props = await promisify<string, Properties>(webdav.getProperties).bind(webdav)(toWebDAVPath(uri))
+        let result = await promisify<string, Properties>(webdav.getProperties).bind(webdav)(toWebDAVPath(uri))
+        let props = {}
+        for(let key in result) {
+            // This is terrible, potentially implementations can exclude the namespace ? 
+            props[key.split(":")[1].toLowerCase()] = result[key] 
+        }
 
         return {
-            ctime: Moment(props['dav:creationdate'] as string).utc().unix(),
-            mtime: Moment(props['dav:getlastmodified'] as string).utc().unix(),
-            size: parseInt(props['dav:getcontentlength'] as string || '0'),
-            type: ((props['dav:resourcetype'] || {}).content as { name: string }[] || []).findIndex(x => x.name == 'dav:collection') == -1 ? vscode.FileType.File : vscode.FileType.Directory,
+            ctime: Moment(props['creationdate'] as string).utc().unix(),
+            mtime: Moment(props['getlastmodified'] as string).utc().unix(),
+            size: parseInt(props['getcontentlength'] as string || '0'),
+            type: ((props['resourcetype'] || {}).content as { name: string }[] || []).findIndex(x => x.name && x.name.endsWith(':collection')) == -1 ? vscode.FileType.File : vscode.FileType.Directory,
         };
     }
 
