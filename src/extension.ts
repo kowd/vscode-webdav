@@ -139,8 +139,6 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
         let path = toWebDAVPath(uri)
         let results = await readdir(path, options) as ConnectionReaddirComplexResult[]
 
-        results.shift()
-
         return results.map(r => [r.name, r.isDirectory ? vscode.FileType.Directory : vscode.FileType.File])
     }
 
@@ -161,14 +159,6 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
 
     public async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
         log(`stat: ${uri}`)
-        if ('/' === normalizePath(uri.path)) {
-            return {
-                type: vscode.FileType.Directory,
-                ctime: 0,
-                mtime: 0,
-                size: 0,
-            };
-        }
 
         let webdav = await this.openConnection(uri)
         let result = await promisify<string, Properties>(webdav.getProperties).bind(webdav)(toWebDAVPath(uri))
