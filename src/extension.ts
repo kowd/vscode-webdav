@@ -1,5 +1,3 @@
-'use strict';
-
 import Moment from 'moment';
 import * as vscode from 'vscode';
 import * as WebDAV from 'webdav-client';
@@ -49,7 +47,6 @@ export async function activate(context: vscode.ExtensionContext) {
     log(`Register extension.remote.webdav.open command... `);
     context.subscriptions.push(vscode.commands.registerCommand('extension.remote.webdav.open', async () => {
         const uriValue = await vscode.window.showInputBox({
-            password: false,
             placeHolder: 'Enter a WebDAV address here ...',
             prompt: "Open remote WebDAV",
             validateInput: validationErrorsForUri
@@ -62,7 +59,6 @@ export async function activate(context: vscode.ExtensionContext) {
         let webdavUri = uriValue.trim().replace(/^http/i, 'webdav',)
 
         let name = await vscode.window.showInputBox({
-            password: false,
             placeHolder: 'Press ENTER to use default ...',
             prompt: "Custom name for Remote WebDAV"
         });
@@ -87,11 +83,6 @@ function normalizePath(p: string): string {
 
 function toWebDAVPath(uri: vscode.Uri): string {
     return encodeURI(normalizePath(uri.path));
-}
-
-export interface WriteFileOptions {
-    create: boolean;
-    overwrite: boolean;
 }
 
 export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
@@ -133,11 +124,9 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
             let webdav = new WebDAV.Connection(baseUri);
             return await action(webdav)
         } catch (e) {
-            if(e instanceof WebDAV.HTTPError) {
-                switch(e.statusCode) {
-                    case 404: throw vscode.FileSystemError.FileNotFound(uri)
-                    case 403: throw vscode.FileSystemError.NoPermissions(uri)
-                }
+            switch(e.statusCode) {
+                case 404: throw vscode.FileSystemError.FileNotFound(uri)
+                case 403: throw vscode.FileSystemError.NoPermissions(uri)
             }
             throw e;
         }
@@ -192,11 +181,10 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     }
 
     public watch(uri: vscode.Uri, options: { recursive: boolean; excludes: string[] }): vscode.Disposable {
-        log(`watch: ${uri}`)
         return { dispose: () => { } };
     }
 
-    public async writeFile(uri: vscode.Uri, content: Uint8Array, options: WriteFileOptions): Promise<void> {
+    public async writeFile(uri: vscode.Uri, content: Uint8Array, options: {create: boolean, overwrite: boolean}): Promise<void> {
         return await this.forConnection("stat", uri, async webdav => {
             await this.throwIfWriteFileIsNotAllowed(uri, options);
 
@@ -206,7 +194,7 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
         })
     }
 
-    protected async throwIfWriteFileIsNotAllowed(uri: vscode.Uri, options: WriteFileOptions) {
+    protected async throwIfWriteFileIsNotAllowed(uri: vscode.Uri, options: {create: boolean, overwrite: boolean}) {
         try {
             let stat = await this.stat(uri);
             if (stat.type === vscode.FileType.Directory)
