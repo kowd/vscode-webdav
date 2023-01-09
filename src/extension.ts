@@ -84,6 +84,8 @@ function toWebDAVPath(uri: vscode.Uri): string {
     return encodeURI(normalizePath(uri.path));
 }
 
+const connections = {}
+
 export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
 
     private readonly _eventEmitter: vscode.EventEmitter<vscode.FileChangeEvent[]>;
@@ -119,8 +121,10 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
         log(`${operation}: ${uri}`)
         try {
             let baseUri = vscode.Uri.parse(uri.toString().replace(/^webdav/i, "http")).with({path:"", fragment:"", query:""}).toString()
-            let webdav = client.createClient(baseUri);
-            return await action(webdav)
+            if(!connections[baseUri]) {
+                connections[baseUri] = client.createClient(baseUri);
+            }
+            return await action(connections[baseUri])
         } catch (e) {
             switch(e.status) {
                 case 404: throw vscode.FileSystemError.FileNotFound(uri)
