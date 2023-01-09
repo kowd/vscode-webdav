@@ -55,17 +55,18 @@ export async function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        let webdavUri = uriValue.trim().replace(/^http/i, 'webdav',)
+        let webdavUri = vscode.Uri.parse(uriValue.trim().replace(/^http/i, 'webdav'))
 
         let name = await vscode.window.showInputBox({
             placeHolder: 'Press ENTER to use default ...',
+            value: webdavUri.authority,
             prompt: "Custom name for Remote WebDAV"
         });
 
         vscode.workspace.updateWorkspaceFolders(
             0, 0,
             {
-                uri: vscode.Uri.parse(webdavUri),
+                uri: webdavUri,
                 name: name?.trim() ?? undefined,
             },
         );
@@ -137,7 +138,7 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     public async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
         return await this.forConnection("readDirectory", uri, async webdav => {
             let results = await webdav.getDirectoryContents(toWebDAVPath(uri)) as client.FileStat[]
-            return results.map(r => [r.basename, r.type == 'directory' ? vscode.FileType.Directory : vscode.FileType.File])
+            return results.map(r => [decodeURI(r.basename), r.type == 'directory' ? vscode.FileType.Directory : vscode.FileType.File])
         })
     }
 
