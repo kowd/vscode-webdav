@@ -43,6 +43,17 @@ export async function activate(context: vscode.ExtensionContext) {
         log(`ERROR: ${e}`);
     }
 
+    log(`Register extension.remote.webdav.resetAuth command... `);
+    context.subscriptions.push(vscode.commands.registerCommand('extension.remote.webdav.resetAuth', async () => {
+        let uris = vscode.workspace.workspaceFolders.map(f => f.uri.toString()).filter(u => u.startsWith("webdav"))
+        if(uris) {
+            let uri = uris.length == 1 ? uris[0] : await vscode.window.showQuickPick(uris, {placeHolder: "Which WebDAV to Authenticate to?"})
+            await authenticateToUri(toBaseUri(vscode.Uri.parse(uri)))
+        } else {
+            vscode.window.showInformationMessage("No WebDAVs folders can be found in the current Workspace")
+        }
+    }))
+
     log(`Register extension.remote.webdav.open command... `);
     context.subscriptions.push(vscode.commands.registerCommand('extension.remote.webdav.open', async () => {
         const uriValue = await vscode.window.showInputBox({
@@ -62,6 +73,8 @@ export async function activate(context: vscode.ExtensionContext) {
             value: webdavUri.authority,
             prompt: "Custom name for Remote WebDAV"
         });
+
+        await authenticateToUri(toBaseUri(webdavUri))
 
         vscode.workspace.updateWorkspaceFolders(
             0, 0,
@@ -97,9 +110,9 @@ interface AuthSettings {
 let secrets: vscode.SecretStorage
 let state: vscode.Memento
 
-async function authenticateToUri(uriKey: string) {
+async function authenticateToUri(uriKey: string): Promise<void> {
+    delete connections[uriKey] // The conections are keywed on the baseUri
     let key = keyFromUri(uriKey)
-    delete connections[key]
     let settings: AuthSettings = { auth: await vscode.window.showQuickPick(["None", "Basic", "Kerberos"], {placeHolder: `Choose authentication for ${uriKey}`}) as AuthType }
     if (settings.auth == "Basic") {
         settings.user = await vscode.window.showInputBox({prompt: "Username", placeHolder: `Username for login to ${uriKey}`})
@@ -145,9 +158,11 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
         let key = keyFromUri(baseUri)
         let options: client.WebDAVClientOptions = {}
         let settings = state.get<AuthSettings>(key, {})
-        if(settings.auth == "Basic") {
+        if(settings.auth === "Basic") {
             let password = await secrets.get(key)
             options = {authType: client.AuthType.Password, username: settings.user, password: password}
+        } else if (settings.auth === "Kerberos") {
+            options = {withCredentials: true}
         }
         return client.createClient(baseUri, options);
     }

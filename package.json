@@ -17,7 +17,8 @@
     "activationEvents": [
         "onFileSystem:webdav",
         "onFileSystem:webdavs",
-        "onCommand:extension.remote.webdav.open"
+        "onCommand:extension.remote.webdav.open",
+        "onCommand:extension.remote.webdav.resetAuth"
     ],
     "main": "./out/main",
     "contributes": {
@@ -26,12 +27,17 @@
                 "command": "extension.remote.webdav.open",
                 "title": "Open WebDAV Uri ...",
                 "category": "Remote WebDAV"
+            },
+            {
+                "command": "extension.remote.webdav.resetAuth",
+                "title": "Reset WebDAV Authentication ...",
+                "category": "Remote WebDAV"
             }
         ],
         "viewsWelcome": [
             {
                 "view": "explorer",
-                "contents": "Open a WebDAV location as a remove workspace.\n[Open WebDAV](command:extension.remote.webdav.open)",
+                "contents": "Open a WebDAV folder as a remove workspace.\n[Open WebDAV](command:extension.remote.webdav.open)",
                 "when": "workspaceFolderCount == 0"
             }
         ]
