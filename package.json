@@ -34,23 +34,7 @@
                 "contents": "Open a WebDAV location as a remove workspace.\n[Open WebDAV](command:extension.remote.webdav.open)",
                 "when": "workspaceFolderCount == 0"
             }
-        ],
-        "configuration":{
-            "title": "WebDAV Workspaces",
-            "properties": {
-                "vscode-webdav.withCredentials": {
-                    "type": "boolean",
-                    "description": "Whether the WebDAV requests should be sent with credentials",
-                    "default": false
-                },
-                "vscode-webdav.authentication": {
-                    "type": "string",
-                    "description": "Type of authentication that will be attempted",
-                    "default": "None",
-                    "enum": ["None", "Basic", "Kerberos"]
-                }
-            }
-        }
+        ]
     },
     "scripts": {
         "vscode:prepublish": "npm run esbuild-base -- --minify",

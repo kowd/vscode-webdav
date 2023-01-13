@@ -4,10 +4,7 @@ import * as client from 'webdav';
 import { FileStat } from 'webdav';
 
 let outputChannel: vscode.OutputChannel;
-
-function log(message: string) {
-    outputChannel.appendLine(message)
-}
+const log = (message: string): void => outputChannel.appendLine(message)
 
 function validationErrorsForUri(value:string):string {
     if (!value) {
@@ -32,6 +29,9 @@ export async function activate(context: vscode.ExtensionContext) {
     outputChannel.hide();
     log('Initializing WebDAV extension...');
     log(`Register provider for webdav scheme... `);
+
+    secrets = context.secrets
+    state = context.globalState
 
     try {
         for(let scheme of ['webdav', 'webdavs']) {
@@ -67,7 +67,7 @@ export async function activate(context: vscode.ExtensionContext) {
             0, 0,
             {
                 uri: webdavUri,
-                name: name?.trim() ?? undefined,
+                name: name?.trim() ?? webdavUri.authority,
             },
         );
     }))
@@ -77,15 +77,39 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() { }
 
-function normalizePath(p: string): string {
-    return p.trim() || "/"
+const normalizePath = (p: string): string => 
+    p.trim() || "/"
+
+const toWebDAVPath = (uri: vscode.Uri): string => 
+    encodeURI(normalizePath(uri.path));
+
+const toBaseUri = (uri: vscode.Uri): string => 
+    vscode.Uri.parse(uri.toString().replace(/^webdav/i, "http")).with({path:"", fragment:"", query:""}).toString()
+
+const keyFromUri = (uriKey:string): string => `webdav.auth.${uriKey}`
+
+type AuthType = "Basic" | "None" | "Kerberos";
+interface AuthSettings {
+    auth?: AuthType,
+    user?: string,
 }
 
-function toWebDAVPath(uri: vscode.Uri): string {
-    return encodeURI(normalizePath(uri.path));
+let secrets: vscode.SecretStorage
+let state: vscode.Memento
+
+async function authenticateToUri(uriKey: string) {
+    let key = keyFromUri(uriKey)
+    delete connections[key]
+    let settings: AuthSettings = { auth: await vscode.window.showQuickPick(["None", "Basic", "Kerberos"], {placeHolder: `Choose authentication for ${uriKey}`}) as AuthType }
+    if (settings.auth == "Basic") {
+        settings.user = await vscode.window.showInputBox({prompt: "Username", placeHolder: `Username for login to ${uriKey}`})
+        let pass = await vscode.window.showInputBox({prompt: "Password", password: true, placeHolder: `Password for ${settings.user}`})
+        await secrets.store(key, pass)
+    }
+    await state.update(key, settings)
 }
 
-const connections = {}
+const connections: {[key: string]: Promise<client.WebDAVClient>} = {}
 
 export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
 
@@ -117,19 +141,39 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
         })
     }
 
+    private async createClient(baseUri: string): Promise<client.WebDAVClient> {
+        let key = keyFromUri(baseUri)
+        let options: client.WebDAVClientOptions = {}
+        let settings = state.get<AuthSettings>(key, {})
+        if(settings.auth == "Basic") {
+            let password = await secrets.get(key)
+            options = {authType: client.AuthType.Password, username: settings.user, password: password}
+        }
+        return client.createClient(baseUri, options);
+    }
+
     private async forConnection<T>(operation:string, uri: vscode.Uri, action: (webdav:client.WebDAVClient) => Promise<T>): Promise<T>
     {
         log(`${operation}: ${uri}`)
+        let baseUri = toBaseUri(uri)
         try {
-            let baseUri = vscode.Uri.parse(uri.toString().replace(/^webdav/i, "http")).with({path:"", fragment:"", query:""}).toString()
             if(!connections[baseUri]) {
-                connections[baseUri] = client.createClient(baseUri);
+                connections[baseUri] = this.createClient(baseUri)
             }
-            return await action(connections[baseUri])
+            return await action(await connections[baseUri])
         } catch (e) {
+            log(`${e} for ${uri}`)
             switch(e.status) {
-                case 404: throw vscode.FileSystemError.FileNotFound(uri)
-                case 403: throw vscode.FileSystemError.NoPermissions(uri)
+                case 401: 
+                    let message = await vscode.window.showWarningMessage(`Authentication failed for ${uri.authority}.`, "Authenticate") 
+                    if(message === "Authenticate") {
+                        await authenticateToUri(baseUri)
+                    }
+                    throw vscode.FileSystemError.NoPermissions(uri)
+                case 403:
+                    throw vscode.FileSystemError.NoPermissions(uri)
+                case 404: 
+                    throw vscode.FileSystemError.FileNotFound(uri)
             }
             throw e;
         }
