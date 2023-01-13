@@ -1,7 +1,7 @@
 {
     "name": "vscode-webdav",
     "displayName": "Remote WebDav Workspace",
-    "description": "WebDav support for handling remote files like local ones. Fork of mkloubert.vscode-webdav-workspace",
+    "description": "WebDav support for handling remote files like local ones",
     "version": "1.0.0",
     "license": "MIT",
     "publisher": "kowd",
