@@ -90,11 +90,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() { }
 
-const normalizePath = (p: string): string => 
-    p.trim() || "/"
-
 const toWebDAVPath = (uri: vscode.Uri): string => 
-    encodeURI(normalizePath(uri.path));
+    uri.path?.trim() || "/"
 
 const toBaseUri = (uri: vscode.Uri): string => 
     vscode.Uri.parse(uri.toString().replace(/^webdav/i, "http")).with({path:"", fragment:"", query:""}).toString()
@@ -201,7 +198,7 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     public async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
         return await this.forConnection("readDirectory", uri, async webdav => {
             let results = await webdav.getDirectoryContents(toWebDAVPath(uri)) as client.FileStat[]
-            return results.map(r => [decodeURI(r.basename), r.type == 'directory' ? vscode.FileType.Directory : vscode.FileType.File])
+            return results.map(r => [r.basename, r.type == 'directory' ? vscode.FileType.Directory : vscode.FileType.File])
         })
     }
 
@@ -213,7 +210,7 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
             } else if (Buffer.isBuffer(body)) {
                 return body
             } else {
-                throw Error("TODO:")
+                throw Error("Not Implemented")
             }
         })
     }
