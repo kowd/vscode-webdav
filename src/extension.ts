@@ -1,12 +1,12 @@
-import Moment from 'moment';
 import * as vscode from 'vscode';
 import * as client from 'webdav';
 import { FileStat } from 'webdav';
+import { parse } from 'date-fns'
 
 let outputChannel: vscode.OutputChannel;
 const log = (message: string): void => outputChannel.appendLine(message)
 
-function validationErrorsForUri(value:string):string {
+function validationErrorsForUri(value:string): string | undefined {
     if (!value) {
         return 'Enter a WebDAV address'
     } else {
@@ -45,10 +45,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
     log(`Register extension.remote.webdav.resetAuth command... `);
     context.subscriptions.push(vscode.commands.registerCommand('extension.remote.webdav.resetAuth', async () => {
-        let uris = vscode.workspace.workspaceFolders.map(f => f.uri.toString()).filter(u => u.startsWith("webdav"))
+        let uris = (vscode.workspace.workspaceFolders || []).map(f => f.uri.toString()).filter(u => u.startsWith("webdav"))
         if(uris) {
             let uri = uris.length == 1 ? uris[0] : await vscode.window.showQuickPick(uris, {placeHolder: "Which WebDAV to Authenticate to?"})
-            await configureAuthForUri(toBaseUri(vscode.Uri.parse(uri)))
+            if(uri) {
+                await configureAuthForUri(toBaseUri(vscode.Uri.parse(uri)))
+            }
         } else {
             vscode.window.showInformationMessage("No WebDAVs folders can be found in the current Workspace")
         }
@@ -62,7 +64,7 @@ export async function activate(context: vscode.ExtensionContext) {
             validateInput: validationErrorsForUri
         });
 
-        if(validationErrorsForUri(uriValue)) {
+        if(!uriValue || validationErrorsForUri(uriValue)) {
             return;
         }
 
@@ -113,7 +115,7 @@ async function configureAuthForUri(uriKey: string): Promise<void> {
     let settings: AuthSettings = { auth: await vscode.window.showQuickPick(["None", "Basic", "Digest", "Kerberos"], {placeHolder: `Choose authentication for ${uriKey}`}) as AuthType }
     if (settings.auth === "Basic" || settings.auth === "Digest") {
         settings.user = await vscode.window.showInputBox({prompt: "Username", placeHolder: `Username for login to ${uriKey}`})
-        let pass = await vscode.window.showInputBox({prompt: "Password", password: true, placeHolder: `Password for ${settings.user}`})
+        let pass = await vscode.window.showInputBox({prompt: "Password", password: true, placeHolder: `Password for ${settings.user}`}) || ""
         await secrets.store(key, pass)
     }
     await state.update(key, settings)
@@ -179,7 +181,7 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
             return await action(await connections[baseUri])
         } catch (e) {
             log(`${e} for ${uri}`)
-            switch(e.status) {
+            switch((e as client.WebDAVClientError).status) {
                 case 401: 
                     let message = await vscode.window.showWarningMessage(`Authentication failed for ${uri.authority}.`, "Authenticate") 
                     if(message === "Authenticate") {
@@ -224,9 +226,10 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     public async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
         return await this.forConnection("stat", uri, async webdav => {
             let props = await webdav.stat(toWebDAVPath(uri)) as FileStat
+            let created = parse(props.lastmod, "iii, dd MM y HH:mm:ss", new Date()).getTime() // Sun, 06 Nov 1994 08:49:37 GMT
             return {
-                ctime: Moment(props.lastmod).utc().unix(),
-                mtime: Moment(props.lastmod).utc().unix(),
+                ctime: created,
+                mtime: created,
                 size: props.size,
                 type: props.type === 'file' ? vscode.FileType.File : vscode.FileType.Directory,
             };
