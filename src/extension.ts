@@ -1,10 +1,34 @@
 import * as vscode from 'vscode';
-import * as client from 'webdav';
-import { FileStat } from 'webdav';
+import { FileStat, WebDAVClient, WebDAVClientOptions, WebDAVClientError, AuthType, createClient } from 'webdav';
 import { parse } from 'date-fns';
+import axios from 'axios';
+import { initializeClient } from 'kerberos';
 
 let outputChannel: vscode.OutputChannel;
 const log = (message: string): void => outputChannel.appendLine(message);
+
+/*
+axios.interceptors.request.use(async (config) => {
+    const url = new URL(config.url || "", config.baseURL);
+    const serviceName = `HTTP@${url.hostname}`;
+    log("KERBEROS");
+
+    try {
+        const client = await initializeClient(serviceName);
+        const token = await client.step("");
+        const header = "Negotiate " + token;
+
+        config.headers = config.headers ?? {};
+        config.headers.authorization = header;
+    } catch (e) {
+        log(`Kerberos Authentication Error: ${e}`);
+    }
+    return config;
+
+}, (error) => {
+    return Promise.reject(error);
+});
+*/
 
 function validationErrorsForUri(value:string): string | undefined {
     if (!value) {
@@ -100,19 +124,20 @@ const toBaseUri = (uri: vscode.Uri): string =>
 
 const keyFromUri = (uriKey:string): string => `webdav.auth.${uriKey}`;
 
-type AuthType = "None" | "Basic" | "Digest" | "Kerberos";
+type WebDAVAuthType = "None" | "Basic" | "Digest" | "Kerberos";
 interface AuthSettings {
-    auth?: AuthType,
+    auth?: WebDAVAuthType,
     user?: string,
 }
 
 let secrets: vscode.SecretStorage;
 let state: vscode.Memento;
+let kerberosDomains: string[] = [];
 
 async function configureAuthForUri(uriKey: string): Promise<void> {
     delete connections[uriKey]; // The conections are keyed on the baseUri
     let key = keyFromUri(uriKey);
-    let settings: AuthSettings = { auth: await vscode.window.showQuickPick(["None", "Basic", "Digest", "Kerberos"], {placeHolder: `Choose authentication for ${uriKey}`}) as AuthType };
+    let settings: AuthSettings = { auth: await vscode.window.showQuickPick(["None", "Basic", "Digest", "Kerberos"], {placeHolder: `Choose authentication for ${uriKey}`}) as WebDAVAuthType };
     if (settings.auth === "Basic" || settings.auth === "Digest") {
         settings.user = await vscode.window.showInputBox({prompt: "Username", placeHolder: `Username for login to ${uriKey}`});
         let pass = await vscode.window.showInputBox({prompt: "Password", password: true, placeHolder: `Password for ${settings.user}`}) || "";
@@ -121,7 +146,7 @@ async function configureAuthForUri(uriKey: string): Promise<void> {
     await state.update(key, settings);
 }
 
-const connections: {[key: string]: Promise<client.WebDAVClient>} = {};
+const connections: {[key: string]: Promise<WebDAVClient>} = {};
 
 export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
 
@@ -153,24 +178,25 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
         });
     }
 
-    private async createClient(baseUri: string): Promise<client.WebDAVClient> {
+    private async createClient(baseUri: string): Promise<WebDAVClient> {
         let key = keyFromUri(baseUri);
-        let options: client.WebDAVClientOptions = {};
+        let options: WebDAVClientOptions = {};
         let settings = state.get<AuthSettings>(key, {});
         if(settings.auth === "Basic" || settings.auth === "Digest") {
             let password = await secrets.get(key);
             options = {
-                authType: settings.auth === "Basic" ? client.AuthType.Password : client.AuthType.Digest, 
+                authType: settings.auth === "Basic" ? AuthType.Password : AuthType.Digest, 
                 username: settings.user, 
                 password: password
             };
         } else if (settings.auth === "Kerberos") {
+            kerberosDomains.push(baseUri);
             options = {withCredentials: true};
         }
-        return client.createClient(baseUri, options);
+        return createClient(baseUri, options);
     }
 
-    private async forConnection<T>(operation:string, uri: vscode.Uri, action: (webdav:client.WebDAVClient) => Promise<T>): Promise<T>
+    private async forConnection<T>(operation:string, uri: vscode.Uri, action: (webdav: WebDAVClient) => Promise<T>): Promise<T>
     {
         log(`${operation}: ${uri}`);
         let baseUri = toBaseUri(uri);
@@ -181,7 +207,7 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
             return await action(await connections[baseUri]);
         } catch (e) {
             log(`${e} for ${uri}`);
-            switch((e as client.WebDAVClientError).status) {
+            switch((e as WebDAVClientError).status) {
                 case 401: 
                     let message = await vscode.window.showWarningMessage(`Authentication failed for ${uri.authority}.`, "Authenticate");
                     if(message === "Authenticate") {
@@ -199,7 +225,7 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     
     public async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
         return await this.forConnection("readDirectory", uri, async webdav => {
-            let results = await webdav.getDirectoryContents(toWebDAVPath(uri)) as client.FileStat[];
+            let results = await webdav.getDirectoryContents(toWebDAVPath(uri)) as FileStat[];
             return results.map(r => [r.basename, r.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File]);
         });
     }
