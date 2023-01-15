@@ -1,34 +1,45 @@
 import * as vscode from 'vscode';
 import { FileStat, WebDAVClient, WebDAVClientOptions, WebDAVClientError, AuthType, createClient } from 'webdav';
 import { parse } from 'date-fns';
-import axios from 'axios';
-import { initializeClient } from 'kerberos';
+import * as axios from 'axios';
+import * as sspi from 'node-expose-sspi';
 
 let outputChannel: vscode.OutputChannel;
 const log = (message: string): void => outputChannel.appendLine(message);
 
-/*
-axios.interceptors.request.use(async (config) => {
-    const url = new URL(config.url || "", config.baseURL);
-    const serviceName = `HTTP@${url.hostname}`;
-    log("KERBEROS");
+const sspiClient = new sspi.sso.Client();
+async function sspiAdapter(config: axios.AxiosRequestConfig): Promise<axios.AxiosResponse> {
+    let url = new URL(config.url?.toString() || "", config.baseURL).toString();
+    let response = await sspiClient.fetch(url, {
+        agent: config.httpAgent,
+        body: config.data,
+        method: config.method,
+        redirect: 'follow',
+    });
 
-    try {
-        const client = await initializeClient(serviceName);
-        const token = await client.step("");
-        const header = "Negotiate " + token;
+    let headers: Record<string, string> = {};
+    for(let entry of response.headers.entries()){
+        headers[entry[0]] = entry[1];
+    }
+    return {
+        config: config,
+        status: response.status,
+        statusText: response.statusText,
+        data: response.body,
+        headers: headers,
+    };
+}
 
-        config.headers = config.headers ?? {};
-        config.headers.authorization = header;
-    } catch (e) {
-        log(`Kerberos Authentication Error: ${e}`);
+axios.default.interceptors.request.use(async (config) => {
+    if(config.withCredentials) {
+        log("Patching Axios for SSPI Authentication");
+        config.adapter =  sspiAdapter;
     }
     return config;
 
 }, (error) => {
     return Promise.reject(error);
 });
-*/
 
 function validationErrorsForUri(value:string): string | undefined {
     if (!value) {
