@@ -3,12 +3,16 @@ import { FileStat, WebDAVClient, WebDAVClientOptions, WebDAVClientError, AuthTyp
 import { parse } from 'date-fns';
 import * as axios from 'axios';
 import * as sspi from 'node-expose-sspi';
+import { Client } from 'node-expose-sspi/dist/sso/client';
 
-let outputChannel: vscode.OutputChannel;
 const log = (message: string): void => outputChannel.appendLine(message);
+let outputChannel: vscode.OutputChannel;
+let sspiClient: Client | undefined = undefined;
 
-const sspiClient = new sspi.sso.Client();
 async function sspiAdapter(config: axios.AxiosRequestConfig): Promise<axios.AxiosResponse> {
+    if(sspiClient === undefined) {
+        sspiClient = new sspi.sso.Client();
+    }
     let url = new URL(config.url?.toString() || "", config.baseURL).toString();
     let response = await sspiClient.fetch(url, {
         agent: config.httpAgent,
@@ -21,22 +25,28 @@ async function sspiAdapter(config: axios.AxiosRequestConfig): Promise<axios.Axio
     for(let entry of response.headers.entries()){
         headers[entry[0]] = entry[1];
     }
+
+    let data: any = undefined;
+    if(config.responseType === "text") {
+        data = response.text();
+    } else {
+        data = response.buffer();
+    }
+
     return {
         config: config,
         status: response.status,
         statusText: response.statusText,
-        data: response.body,
+        data: data,
         headers: headers,
     };
 }
 
 axios.default.interceptors.request.use(async (config) => {
     if(config.withCredentials) {
-        log("Patching Axios for SSPI Authentication");
         config.adapter =  sspiAdapter;
     }
     return config;
-
 }, (error) => {
     return Promise.reject(error);
 });
@@ -135,7 +145,7 @@ const toBaseUri = (uri: vscode.Uri): string =>
 
 const keyFromUri = (uriKey:string): string => `webdav.auth.${uriKey}`;
 
-type WebDAVAuthType = "None" | "Basic" | "Digest" | "Kerberos";
+type WebDAVAuthType = "None" | "Basic" | "Digest" | "Windows (SSPI)";
 interface AuthSettings {
     auth?: WebDAVAuthType,
     user?: string,
@@ -143,12 +153,11 @@ interface AuthSettings {
 
 let secrets: vscode.SecretStorage;
 let state: vscode.Memento;
-let kerberosDomains: string[] = [];
 
 async function configureAuthForUri(uriKey: string): Promise<void> {
     delete connections[uriKey]; // The conections are keyed on the baseUri
     let key = keyFromUri(uriKey);
-    let settings: AuthSettings = { auth: await vscode.window.showQuickPick(["None", "Basic", "Digest", "Kerberos"], {placeHolder: `Choose authentication for ${uriKey}`}) as WebDAVAuthType };
+    let settings: AuthSettings = { auth: await vscode.window.showQuickPick(["None", "Basic", "Digest", "Windows (SSPI)"], {placeHolder: `Choose authentication for ${uriKey}`}) as WebDAVAuthType };
     if (settings.auth === "Basic" || settings.auth === "Digest") {
         settings.user = await vscode.window.showInputBox({prompt: "Username", placeHolder: `Username for login to ${uriKey}`});
         let pass = await vscode.window.showInputBox({prompt: "Password", password: true, placeHolder: `Password for ${settings.user}`}) || "";
@@ -200,9 +209,8 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
                 username: settings.user, 
                 password: password
             };
-        } else if (settings.auth === "Kerberos") {
-            kerberosDomains.push(baseUri);
-            options = {withCredentials: true};
+        } else if (settings.auth === "Windows (SSPI)") {
+            options = {withCredentials: true}; // This is a signal to use SSPI
         }
         return createClient(baseUri, options);
     }
@@ -236,8 +244,10 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     
     public async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
         return await this.forConnection("readDirectory", uri, async webdav => {
-            let results = await webdav.getDirectoryContents(toWebDAVPath(uri)) as FileStat[];
-            return results.map(r => [r.basename, r.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File]);
+            let results = await webdav.getDirectoryContents(toWebDAVPath(uri), {deep: false}) as FileStat[];
+            // Some WebDAV providers ignore the deep: false parameter and enumerate the whole tree, hence the filtering
+            let contents = results.filter(f => `${uri.path.toLowerCase()}/${f.basename.toLowerCase()}`.replace("//", "/") === f.filename.toLowerCase());
+            return contents.map(r => [r.basename, r.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File]);
         });
     }
 
@@ -263,10 +273,10 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     public async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
         return await this.forConnection("stat", uri, async webdav => {
             let props = await webdav.stat(toWebDAVPath(uri)) as FileStat;
-            let created = parse(props.lastmod, "iii, dd MM y HH:mm:ss", new Date()).getTime(); // Sun, 06 Nov 1994 08:49:37 GMT
+            let lastmod = parse((props.lastmod ?? "").substring(5), "dd MM y HH:mm:ss", new Date()).getTime(); // Sun, 06 Nov 1994 08:49:37 GMT
             return {
-                ctime: created,
-                mtime: created,
+                ctime: lastmod,
+                mtime: lastmod,
                 size: props.size,
                 type: props.type === 'file' ? vscode.FileType.File : vscode.FileType.Directory,
             };

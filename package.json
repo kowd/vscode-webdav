@@ -1,7 +1,7 @@
 {
     "name": "vscode-webdav",
-    "displayName": "Remote WebDav Workspace",
-    "description": "WebDav support for handling remote files like local ones",
+    "displayName": "Remote WebDAV Workspace",
+    "description": "WebDAV support for handling remote files like local ones",
     "version": "1.0.0",
     "license": "MIT",
     "publisher": "kowd",
@@ -20,7 +20,7 @@
         "onCommand:extension.remote.webdav.open",
         "onCommand:extension.remote.webdav.resetAuth"
     ],
-    "main": "./out/main",
+    "main": "./out/extension.js",
     "contributes": {
         "commands": [
             {
