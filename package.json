@@ -2,7 +2,7 @@
     "name": "vscode-webdav",
     "displayName": "WebDAV Workspace",
     "description": "WebDAV file system provider",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "author": {
         "name": "Miro Paskov"
     },
@@ -47,7 +47,8 @@
     },
     "scripts": {
         "vscode:prepublish": "npm run esbuild-base -- --minify",
-        "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/main.js --external:vscode --format=cjs --platform=node",
+        "esbuild-base": "npm run copy-sspi && esbuild ./src/extension.ts --bundle --outfile=out/main.js --external:vscode --format=cjs --platform=node --loader:.node=copy",
+        "copy-sspi": "node ./src/bundle.js",
         "esbuild": "npm run esbuild-base -- --sourcemap",
         "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
         "lint": "eslint src --ext ts",
