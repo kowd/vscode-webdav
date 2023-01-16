@@ -9,3 +9,7 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 .nyc_output
+node_modules
+src/
+tsconfig.json
+webpack.config.js
