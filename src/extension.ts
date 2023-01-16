@@ -69,11 +69,11 @@ function validationErrorsForUri(value:string): string | undefined {
 export async function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
-        outputChannel = vscode.window.createOutputChannel('WebDAV Workspace')
+        outputChannel = vscode.window.createOutputChannel('WebDAV Workspaces')
     );
     outputChannel.hide();
     log('Initializing WebDAV extension...');
-    log(`Register provider for webdav scheme... `);
+    log('Register provider for webdav schemes... ');
 
     secrets = context.secrets;
     state = context.globalState;
@@ -143,8 +143,6 @@ const toWebDAVPath = (uri: vscode.Uri): string =>
 const toBaseUri = (uri: vscode.Uri): string => 
     vscode.Uri.parse(uri.toString().replace(/^webdav/i, "http")).with({path:"", fragment:"", query:""}).toString();
 
-const keyFromUri = (uriKey:string): string => `webdav.auth.${uriKey}`;
-
 type WebDAVAuthType = "None" | "Basic" | "Digest" | "Windows (SSPI)";
 interface AuthSettings {
     auth?: WebDAVAuthType,
@@ -156,14 +154,18 @@ let state: vscode.Memento;
 
 async function configureAuthForUri(uriKey: string): Promise<void> {
     delete connections[uriKey]; // The conections are keyed on the baseUri
-    let key = keyFromUri(uriKey);
-    let settings: AuthSettings = { auth: await vscode.window.showQuickPick(["None", "Basic", "Digest", "Windows (SSPI)"], {placeHolder: `Choose authentication for ${uriKey}`}) as WebDAVAuthType };
+    let authOptions = ["None", "Basic", "Digest"];
+    if(process.platform === "win32") {
+        authOptions.push("Windows (SSPI)");
+    }
+
+    let settings: AuthSettings = { auth: await vscode.window.showQuickPick(authOptions, {placeHolder: `Choose authentication for ${uriKey}`}) as WebDAVAuthType };
     if (settings.auth === "Basic" || settings.auth === "Digest") {
         settings.user = await vscode.window.showInputBox({prompt: "Username", placeHolder: `Username for login to ${uriKey}`});
         let pass = await vscode.window.showInputBox({prompt: "Password", password: true, placeHolder: `Password for ${settings.user}`}) || "";
-        await secrets.store(key, pass);
+        await secrets.store(uriKey, pass);
     }
-    await state.update(key, settings);
+    await state.update(uriKey, settings);
 }
 
 const connections: {[key: string]: Promise<WebDAVClient>} = {};
@@ -199,11 +201,10 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     }
 
     private async createClient(baseUri: string): Promise<WebDAVClient> {
-        let key = keyFromUri(baseUri);
         let options: WebDAVClientOptions = {};
-        let settings = state.get<AuthSettings>(key, {});
+        let settings = state.get<AuthSettings>(baseUri, {});
         if(settings.auth === "Basic" || settings.auth === "Digest") {
-            let password = await secrets.get(key);
+            let password = await secrets.get(baseUri);
             options = {
                 authType: settings.auth === "Basic" ? AuthType.Password : AuthType.Digest, 
                 username: settings.user, 

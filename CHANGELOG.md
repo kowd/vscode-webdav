@@ -1,8 +1,7 @@
-# Change Log (vscode-remote)
+# Change Log (vscode-webdav)
 
-## 1.0.0 (January 21st, 2023)
+## 1.0.0 (Jan 2023)
 
-* Adds command
-* Welcome screen
-* Adds cofnig
-
+* First version of the WebDAV FileSystemProvider
+* Support for three different authenttication schemes - Basic, Digest and Windows SSPI (Kerberos)
+* Secrets are stored securely in the VS Code SecretStorage

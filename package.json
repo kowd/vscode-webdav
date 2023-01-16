@@ -25,7 +25,7 @@
         "commands": [
             {
                 "command": "extension.remote.webdav.open",
-                "title": "Open WebDAV Uri ...",
+                "title": "Open WebDAV Workspace...",
                 "category": "Remote WebDAV"
             },
             {
