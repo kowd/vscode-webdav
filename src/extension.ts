@@ -25,7 +25,7 @@ async function sspiAdapter(config: axios.AxiosRequestConfig): Promise<axios.Axio
     for(let entry of response.headers.entries()){
         headers[entry[0]] = entry[1];
     }
-
+    
     let data: any = undefined;
     if(config.responseType === "text") {
         data = response.text();
