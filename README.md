@@ -16,7 +16,7 @@ There are three ways to open a WebDAV Workspace
 
 * When no folder is open in VS Code, activate the explorer and click on the "Open WebDAV"
 
-* Run the "Open WebDAV Workspace..." command and follow the promts to enter an address, name and choose authentication.
+* Run the "Open WebDAV Workspace..." command and follow the prompts to enter an address, name and choose authentication.
 
 * Open a `.code-workspace` file which contains a uri with a `webdav` or `webdavs` scheme (corresponding to `http` and `https` WebDAV endpoints respectively). 
 ```
@@ -35,10 +35,10 @@ There are three ways to open a WebDAV Workspace
 The authentication schemes supported by the extension are:
 * `None` - no authentication.
 * `Basic` - for Basic authentication consider using TLS too. The password for the account is stored securely in the VS Code SecretStorage.
-* `Digest` - The password for the account is stored securely in the VS Code SecretStorage. This means that the OS-specific credentail storage will be used.
+* `Digest` - The password for the account is stored securely in the VS Code SecretStorage. This means that the OS-specific credential storage will be used.
 * `Windows (SSPI)` - This authentication uses the [Windows Security Support Provider Interface](https://learn.microsoft.com/en-us/windows/win32/rpc/security-support-provider-interface-sspi-). In practice this means that the authentication is Kerberos (via [SPNEGO](https://en.wikipedia.org/wiki/SPNEGO)). This should work the same way as in browsers like Edge or Chrome. It is only available on Windows.
 
-### Changing Passowrds or Authentication
+### Changing Passwords or Authentication
 
 If `Basic` or `Digest` authentication is used, you may need to update the password or the account.
 
