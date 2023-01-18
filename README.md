@@ -19,14 +19,12 @@ There are three ways to open a WebDAV Workspace
 * Run the "Open WebDAV Workspace..." command and follow the prompts to enter an address, name and choose authentication.
 
 * Open a `.code-workspace` file which contains a uri with a `webdav` or `webdavs` scheme (corresponding to `http` and `https` WebDAV endpoints respectively). 
-```
+```js
 {
-	"folders": [
-		{
-			"name": "live.sysinternals.com",
-			"uri": "webdavs://live.sysinternals.com"
-		}
-	]
+  "folders": [{
+    "name": "live.sysinternals.com",
+    "uri": "webdavs://live.sysinternals.com"
+  }]
 }
 ```
 

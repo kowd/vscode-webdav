@@ -2,49 +2,54 @@ import * as vscode from 'vscode';
 import { FileStat, WebDAVClient, WebDAVClientOptions, WebDAVClientError, AuthType, createClient } from 'webdav';
 import { parse } from 'date-fns';
 import * as axios from 'axios';
-import * as sspi from 'node-expose-sspi';
-import { Client } from 'node-expose-sspi/dist/sso/client';
 
 const log = (message: string): void => outputChannel.appendLine(message);
 let outputChannel: vscode.OutputChannel;
-let sspiClient: Client | undefined = undefined;
 
-async function sspiAdapter(config: axios.AxiosRequestConfig): Promise<axios.AxiosResponse> {
-    if(sspiClient === undefined) {
-        sspiClient = new sspi.sso.Client();
-    }
-    let url = new URL(config.url?.toString() || "", config.baseURL).toString();
-    let response = await sspiClient.fetch(url, {
-        agent: config.httpAgent,
-        body: config.data,
-        method: config.method,
-        redirect: 'follow',
-    });
+const IS_WINDOWS = process.platform === "win32";
+let sspiClient: any = undefined;
+let sspiAdapter:(config:axios.AxiosRequestConfig)=>Promise<axios.AxiosResponse>;
 
-    let headers: Record<string, string> = {};
-    for(let entry of response.headers.entries()){
-        headers[entry[0]] = entry[1];
-    }
+if(IS_WINDOWS) {
+    const sspi = require('node-expose-sspi');
     
-    let data: any = undefined;
-    if(config.responseType === "text") {
-        data = response.text();
-    } else {
-        data = response.buffer();
-    }
+    sspiAdapter = async (config: axios.AxiosRequestConfig): Promise<axios.AxiosResponse> => {
+        if(sspiClient === undefined) {
+            sspiClient = new sspi.sso.Client();
+        }
+        let url = new URL(config.url?.toString() || "", config.baseURL).toString();
+        let response = await sspiClient.fetch(url, {
+            agent: config.httpAgent,
+            body: config.data,
+            method: config.method,
+            redirect: 'follow',
+        });
 
-    return {
-        config: config,
-        status: response.status,
-        statusText: response.statusText,
-        data: data,
-        headers: headers,
+        let headers: Record<string, string> = {};
+        for(let entry of response.headers.entries()){
+            headers[entry[0]] = entry[1];
+        }
+        
+        let data: any = undefined;
+        if(config.responseType === "text") {
+            data = response.text();
+        } else {
+            data = response.buffer();
+        }
+
+        return {
+            config: config,
+            status: response.status,
+            statusText: response.statusText,
+            data: data,
+            headers: headers,
+        };
     };
 }
 
 axios.default.interceptors.request.use(async (config) => {
     if(config.withCredentials) {
-        config.adapter =  sspiAdapter;
+        config.adapter = sspiAdapter;
     }
     return config;
 }, (error) => {
@@ -155,7 +160,7 @@ let state: vscode.Memento;
 async function configureAuthForUri(uriKey: string): Promise<void> {
     delete connections[uriKey]; // The conections are keyed on the baseUri
     let authOptions = ["None", "Basic", "Digest"];
-    if(process.platform === "win32") {
+    if(IS_WINDOWS) {
         authOptions.push("Windows (SSPI)");
     }
 

@@ -2,7 +2,7 @@
     "name": "vscode-webdav",
     "displayName": "WebDAV Workspace",
     "description": "WebDAV file system provider",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "author": {
         "name": "Miro Paskov"
     },
