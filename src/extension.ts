@@ -56,7 +56,7 @@ axios.default.interceptors.request.use(async (config) => {
     return Promise.reject(error);
 });
 
-function validationErrorsForUri(value:string): string | undefined {
+export function validationErrorsForUri(value:string): string | undefined {
     if (!value) {
         return 'Enter a WebDAV address';
     } else {
@@ -114,7 +114,6 @@ export async function openWebdav(){
 }
 
 export async function activate(context: vscode.ExtensionContext) {
-
     context.subscriptions.push(
         outputChannel = vscode.window.createOutputChannel('WebDAV Workspaces')
     );
@@ -125,14 +124,10 @@ export async function activate(context: vscode.ExtensionContext) {
     secrets = context.secrets;
     state = context.globalState;
 
-    try {
-        for(let scheme of ['webdav', 'webdavs']) {
-            context.subscriptions.push(
-                vscode.workspace.registerFileSystemProvider(scheme, new WebDAVFileSystemProvider(), { isCaseSensitive: true })
-            );
-        }
-    } catch (e) {
-        log(`ERROR: ${e}`);
+    for(let scheme of ['webdav', 'webdavs']) {
+        context.subscriptions.push(
+            vscode.workspace.registerFileSystemProvider(scheme, new WebDAVFileSystemProvider(), { isCaseSensitive: true })
+        );
     }
 
     log(`Register extension.remote.webdav.resetAuth command... `);
@@ -184,7 +179,6 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     private readonly _eventEmitter: vscode.EventEmitter<vscode.FileChangeEvent[]>;
 
     public constructor() {
-
         this._eventEmitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
         this.onDidChangeFile = this._eventEmitter.event;
     }
