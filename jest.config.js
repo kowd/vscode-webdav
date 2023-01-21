@@ -7,14 +7,15 @@ module.exports = {
 
   coverageDirectory: "coverage",
   coveragePathIgnorePatterns: [
-    "\\\\node_modules\\\\"
+    "\\\\node_modules\\\\",
+    "\\\\out\\\\",
   ],
   coverageProvider: "v8",
   coverageReporters: [
     "lcov",
   ],
   preset: 'ts-jest',
-  testEnvironment: 'node'
-  // An object that configures minimum threshold enforcement for coverage results
-  // coverageThreshold: undefined,
+  testEnvironment: 'node',
+  maxWorkers: 1,
+  moduleDirectories: ["node_modules"],
 };

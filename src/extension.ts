@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import * as vscode from 'vscode'; 
 import { FileStat, WebDAVClient, WebDAVClientOptions, WebDAVClientError, AuthType, createClient } from 'webdav';
 import { parse } from 'date-fns';
 import * as axios from 'axios';
@@ -71,6 +71,48 @@ function validationErrorsForUri(value:string): string | undefined {
     }
 }
 
+export async function resetAuth(){
+    let uris = (vscode.workspace.workspaceFolders || []).map(f => f.uri.toString()).filter(u => u.startsWith("webdav"));
+    if(uris) {
+        let uri = uris.length === 1 ? uris[0] : await vscode.window.showQuickPick(uris, {placeHolder: "Which WebDAV to Authenticate to?"});
+        if(uri) {
+            await configureAuthForUri(toBaseUri(vscode.Uri.parse(uri)));
+        }
+    } else {
+        vscode.window.showInformationMessage("No WebDAVs folders can be found in the current Workspace");
+    }
+}
+
+export async function openWebdav(){
+    const uriValue = await vscode.window.showInputBox({
+        placeHolder: 'Enter a WebDAV address here ...',
+        prompt: "Open remote WebDAV",
+        validateInput: validationErrorsForUri
+    });
+
+    if(!uriValue || validationErrorsForUri(uriValue)) {
+        return;
+    }
+
+    let webdavUri = vscode.Uri.parse(uriValue.trim().replace(/^http/i, 'webdav'));
+
+    let name = await vscode.window.showInputBox({
+        placeHolder: 'Press ENTER to use default ...',
+        value: webdavUri.authority,
+        prompt: "Custom name for Remote WebDAV"
+    });
+
+    await configureAuthForUri(toBaseUri(webdavUri));
+
+    vscode.workspace.updateWorkspaceFolders(
+        0, 0,
+        {
+            uri: webdavUri,
+            name: name?.trim() ?? webdavUri.authority,
+        },
+    );
+}
+
 export async function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
@@ -94,70 +136,32 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     log(`Register extension.remote.webdav.resetAuth command... `);
-    context.subscriptions.push(vscode.commands.registerCommand('extension.remote.webdav.resetAuth', async () => {
-        let uris = (vscode.workspace.workspaceFolders || []).map(f => f.uri.toString()).filter(u => u.startsWith("webdav"));
-        if(uris) {
-            let uri = uris.length === 1 ? uris[0] : await vscode.window.showQuickPick(uris, {placeHolder: "Which WebDAV to Authenticate to?"});
-            if(uri) {
-                await configureAuthForUri(toBaseUri(vscode.Uri.parse(uri)));
-            }
-        } else {
-            vscode.window.showInformationMessage("No WebDAVs folders can be found in the current Workspace");
-        }
-    }));
+    context.subscriptions.push(vscode.commands.registerCommand('extension.remote.webdav.resetAuth', resetAuth));
 
     log(`Register extension.remote.webdav.open command... `);
-    context.subscriptions.push(vscode.commands.registerCommand('extension.remote.webdav.open', async () => {
-        const uriValue = await vscode.window.showInputBox({
-            placeHolder: 'Enter a WebDAV address here ...',
-            prompt: "Open remote WebDAV",
-            validateInput: validationErrorsForUri
-        });
-
-        if(!uriValue || validationErrorsForUri(uriValue)) {
-            return;
-        }
-
-        let webdavUri = vscode.Uri.parse(uriValue.trim().replace(/^http/i, 'webdav'));
-
-        let name = await vscode.window.showInputBox({
-            placeHolder: 'Press ENTER to use default ...',
-            value: webdavUri.authority,
-            prompt: "Custom name for Remote WebDAV"
-        });
-
-        await configureAuthForUri(toBaseUri(webdavUri));
-
-        vscode.workspace.updateWorkspaceFolders(
-            0, 0,
-            {
-                uri: webdavUri,
-                name: name?.trim() ?? webdavUri.authority,
-            },
-        );
-    }));
+    context.subscriptions.push(vscode.commands.registerCommand('extension.remote.webdav.open', openWebdav));
 
     outputChannel.appendLine('Extension has been initialized.');
 }
 
 export function deactivate() { }
 
-const toWebDAVPath = (uri: vscode.Uri): string => 
+export const toWebDAVPath = (uri: vscode.Uri): string => 
     uri.path?.trim() || "/";
 
-const toBaseUri = (uri: vscode.Uri): string => 
+export const toBaseUri = (uri: vscode.Uri): string => 
     vscode.Uri.parse(uri.toString().replace(/^webdav/i, "http")).with({path:"", fragment:"", query:""}).toString();
 
-type WebDAVAuthType = "None" | "Basic" | "Digest" | "Windows (SSPI)";
-interface AuthSettings {
+export type WebDAVAuthType = "None" | "Basic" | "Digest" | "Windows (SSPI)";
+export interface AuthSettings {
     auth?: WebDAVAuthType,
     user?: string,
 }
 
-let secrets: vscode.SecretStorage;
-let state: vscode.Memento;
+export let secrets: vscode.SecretStorage;
+export let state: vscode.Memento;
 
-async function configureAuthForUri(uriKey: string): Promise<void> {
+export async function configureAuthForUri(uriKey: string): Promise<void> {
     delete connections[uriKey]; // The conections are keyed on the baseUri
     let authOptions = ["None", "Basic", "Digest"];
     if(IS_WINDOWS) {
@@ -173,7 +177,7 @@ async function configureAuthForUri(uriKey: string): Promise<void> {
     await state.update(uriKey, settings);
 }
 
-const connections: {[key: string]: Promise<WebDAVClient>} = {};
+export const connections: {[key: string]: Promise<WebDAVClient>} = {};
 
 export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
 
