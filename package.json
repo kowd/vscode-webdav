@@ -49,8 +49,8 @@
         "vscode:prepublish": "npm run esbuild-base -- --minify",
         "esbuild-base": "npm run copy-sspi && esbuild ./src/extension.ts --bundle --outfile=out/main.js --external:vscode --format=cjs --platform=node --loader:.node=copy",
         "copy-sspi": "node ./src/bundle.js",
-        "esbuild": "npm run esbuild-base -- --sourcemap",
-        "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+        "build": "npm run esbuild-base -- --sourcemap",
+        "watch": "npm run esbuild-base -- --sourcemap --watch",
         "lint": "eslint src --ext ts",
         "test": "jest"
     },
