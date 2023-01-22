@@ -1,6 +1,7 @@
 [![GitHub](https://img.shields.io/github/license/kowd/vscode-webdav?style=flat-square)](https://github.com/kowd/vscode-webdav/blob/main/LICENSE)
 [![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/kowd.vscode-webdav?style=flat-square)](https://marketplace.visualstudio.com/items?itemName=kowd.vscode-webdav)
 [![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/kowd.vscode-webdav?style=flat-square)](https://marketplace.visualstudio.com/items?itemName=kowd.vscode-webdav)
+[![Coverage](https://img.shields.io/coverallsCoverage/github/kowd/vscode-webdav?style=flat-square)](https://coveralls.io/github/kowd/vscode-webdav)
 
 # WebDAV Workspaces for Visual Studio Code
 

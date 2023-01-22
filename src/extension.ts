@@ -1,4 +1,4 @@
-import * as vscode from 'vscode'; 
+import * as vscode from 'vscode';
 import { FileStat, WebDAVClient, WebDAVClientOptions, WebDAVClientError, AuthType, createClient } from 'webdav';
 import { parse } from 'date-fns';
 import * as axios from 'axios';
@@ -8,13 +8,13 @@ let outputChannel: vscode.OutputChannel;
 
 const IS_WINDOWS = process.platform === "win32";
 let sspiClient: any = undefined;
-let sspiAdapter:(config:axios.AxiosRequestConfig)=>Promise<axios.AxiosResponse>;
+let sspiAdapter: (config: axios.AxiosRequestConfig) => Promise<axios.AxiosResponse>;
 
-if(IS_WINDOWS) {
+if (IS_WINDOWS) {
     const sspi = require('node-expose-sspi');
-    
+
     sspiAdapter = async (config: axios.AxiosRequestConfig): Promise<axios.AxiosResponse> => {
-        if(sspiClient === undefined) {
+        if (sspiClient === undefined) {
             sspiClient = new sspi.sso.Client();
         }
         let url = new URL(config.url?.toString() || "", config.baseURL).toString();
@@ -26,12 +26,12 @@ if(IS_WINDOWS) {
         });
 
         let headers: Record<string, string> = {};
-        for(let entry of response.headers.entries()){
+        for (let entry of response.headers.entries()) {
             headers[entry[0]] = entry[1];
         }
-        
+
         let data: any = undefined;
-        if(config.responseType === "text") {
+        if (config.responseType === "text") {
             data = response.text();
         } else {
             data = response.buffer();
@@ -48,7 +48,7 @@ if(IS_WINDOWS) {
 }
 
 axios.default.interceptors.request.use(async (config) => {
-    if(config.withCredentials) {
+    if (config.withCredentials) {
         config.adapter = sspiAdapter;
     }
     return config;
@@ -56,7 +56,7 @@ axios.default.interceptors.request.use(async (config) => {
     return Promise.reject(error);
 });
 
-export function validationErrorsForUri(value:string): string | undefined {
+export function validationErrorsForUri(value: string): string | undefined {
     if (!value) {
         return 'Enter a WebDAV address';
     } else {
@@ -71,11 +71,11 @@ export function validationErrorsForUri(value:string): string | undefined {
     }
 }
 
-export async function resetAuth(){
+export async function resetAuth() {
     let uris = (vscode.workspace.workspaceFolders || []).map(f => f.uri.toString()).filter(u => u.startsWith("webdav"));
-    if(uris) {
-        let uri = uris.length === 1 ? uris[0] : await vscode.window.showQuickPick(uris, {placeHolder: "Which WebDAV to Authenticate to?"});
-        if(uri) {
+    if (uris) {
+        let uri = uris.length === 1 ? uris[0] : await vscode.window.showQuickPick(uris, { placeHolder: "Which WebDAV to Authenticate to?" });
+        if (uri) {
             await configureAuthForUri(toBaseUri(vscode.Uri.parse(uri)));
         }
     } else {
@@ -83,14 +83,14 @@ export async function resetAuth(){
     }
 }
 
-export async function openWebdav(){
+export async function openWebdav() {
     const uriValue = await vscode.window.showInputBox({
         placeHolder: 'Enter a WebDAV address here ...',
         prompt: "Open remote WebDAV",
         validateInput: validationErrorsForUri
     });
 
-    if(!uriValue || validationErrorsForUri(uriValue)) {
+    if (!uriValue || validationErrorsForUri(uriValue)) {
         return;
     }
 
@@ -124,7 +124,7 @@ export async function activate(context: vscode.ExtensionContext) {
     secrets = context.secrets;
     state = context.globalState;
 
-    for(let scheme of ['webdav', 'webdavs']) {
+    for (let scheme of ['webdav', 'webdavs']) {
         context.subscriptions.push(
             vscode.workspace.registerFileSystemProvider(scheme, new WebDAVFileSystemProvider(), { isCaseSensitive: true })
         );
@@ -141,11 +141,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() { }
 
-export const toWebDAVPath = (uri: vscode.Uri): string => 
+export const toWebDAVPath = (uri: vscode.Uri): string =>
     uri.path?.trim() || "/";
 
-export const toBaseUri = (uri: vscode.Uri): string => 
-    vscode.Uri.parse(uri.toString().replace(/^webdav/i, "http")).with({path:"", fragment:"", query:""}).toString();
+export const toBaseUri = (uri: vscode.Uri): string =>
+    vscode.Uri.parse(uri.toString().replace(/^webdav/i, "http")).with({ path: "", fragment: "", query: "" }).toString();
 
 export type WebDAVAuthType = "None" | "Basic" | "Digest" | "Windows (SSPI)";
 export interface AuthSettings {
@@ -159,20 +159,20 @@ export let state: vscode.Memento;
 export async function configureAuthForUri(uriKey: string): Promise<void> {
     delete connections[uriKey]; // The conections are keyed on the baseUri
     let authOptions = ["None", "Basic", "Digest"];
-    if(IS_WINDOWS) {
+    if (IS_WINDOWS) {
         authOptions.push("Windows (SSPI)");
     }
 
-    let settings: AuthSettings = { auth: await vscode.window.showQuickPick(authOptions, {placeHolder: `Choose authentication for ${uriKey}`}) as WebDAVAuthType };
+    let settings: AuthSettings = { auth: await vscode.window.showQuickPick(authOptions, { placeHolder: `Choose authentication for ${uriKey}` }) as WebDAVAuthType };
     if (settings.auth === "Basic" || settings.auth === "Digest") {
-        settings.user = await vscode.window.showInputBox({prompt: "Username", placeHolder: `Username for login to ${uriKey}`});
-        let pass = await vscode.window.showInputBox({prompt: "Password", password: true, placeHolder: `Password for ${settings.user}`}) || "";
+        settings.user = await vscode.window.showInputBox({ prompt: "Username", placeHolder: `Username for login to ${uriKey}` });
+        let pass = await vscode.window.showInputBox({ prompt: "Password", password: true, placeHolder: `Password for ${settings.user}` }) || "";
         await secrets.store(uriKey, pass);
     }
     await state.update(uriKey, settings);
 }
 
-export const connections: {[key: string]: Promise<WebDAVClient>} = {};
+export const connections: { [key: string]: Promise<WebDAVClient> } = {};
 
 export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
 
@@ -206,49 +206,48 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
     private async createClient(baseUri: string): Promise<WebDAVClient> {
         let options: WebDAVClientOptions = {};
         let settings = state.get<AuthSettings>(baseUri, {});
-        if(settings.auth === "Basic" || settings.auth === "Digest") {
+        if (settings.auth === "Basic" || settings.auth === "Digest") {
             let password = await secrets.get(baseUri);
             options = {
-                authType: settings.auth === "Basic" ? AuthType.Password : AuthType.Digest, 
-                username: settings.user, 
+                authType: settings.auth === "Basic" ? AuthType.Password : AuthType.Digest,
+                username: settings.user,
                 password: password
             };
         } else if (settings.auth === "Windows (SSPI)") {
-            options = {withCredentials: true}; // This is a signal to use SSPI
+            options = { withCredentials: true }; // This is a signal to use SSPI
         }
         return createClient(baseUri, options);
     }
 
-    private async forConnection<T>(operation:string, uri: vscode.Uri, action: (webdav: WebDAVClient) => Promise<T>): Promise<T>
-    {
+    private async forConnection<T>(operation: string, uri: vscode.Uri, action: (webdav: WebDAVClient) => Promise<T>): Promise<T> {
         log(`${operation}: ${uri}`);
         let baseUri = toBaseUri(uri);
         try {
-            if(!connections[baseUri]) {
+            if (!connections[baseUri]) {
                 connections[baseUri] = this.createClient(baseUri);
             }
             return await action(await connections[baseUri]);
         } catch (e) {
             log(`${e} for ${uri}`);
-            switch((e as WebDAVClientError).status) {
-                case 401: 
+            switch ((e as WebDAVClientError).status) {
+                case 401:
                     let message = await vscode.window.showWarningMessage(`Authentication failed for ${uri.authority}.`, "Authenticate");
-                    if(message === "Authenticate") {
+                    if (message === "Authenticate") {
                         await configureAuthForUri(baseUri);
                     }
                     throw vscode.FileSystemError.NoPermissions(uri);
                 case 403:
                     throw vscode.FileSystemError.NoPermissions(uri);
-                case 404: 
+                case 404:
                     throw vscode.FileSystemError.FileNotFound(uri);
             }
             throw e;
         }
     }
-    
+
     public async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
         return await this.forConnection("readDirectory", uri, async webdav => {
-            let results = await webdav.getDirectoryContents(toWebDAVPath(uri), {deep: false}) as FileStat[];
+            let results = await webdav.getDirectoryContents(toWebDAVPath(uri), { deep: false }) as FileStat[];
             // Some WebDAV providers ignore the deep: false parameter and enumerate the whole tree, hence the filtering
             let contents = results.filter(f => `${uri.path.toLowerCase()}/${f.basename.toLowerCase()}`.replace("//", "/") === f.filename.toLowerCase());
             return contents.map(r => [r.basename, r.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File]);
@@ -291,14 +290,14 @@ export class WebDAVFileSystemProvider implements vscode.FileSystemProvider {
         return { dispose: () => { } };
     }
 
-    public async writeFile(uri: vscode.Uri, content: Uint8Array, options: {create: boolean, overwrite: boolean}): Promise<void> {
+    public async writeFile(uri: vscode.Uri, content: Uint8Array, options: { create: boolean, overwrite: boolean }): Promise<void> {
         return await this.forConnection("stat", uri, async webdav => {
             await this.throwIfWriteFileIsNotAllowed(uri, options);
-            await webdav.putFileContents(toWebDAVPath(uri), content, {overwrite: options.overwrite});
+            await webdav.putFileContents(toWebDAVPath(uri), content, { overwrite: options.overwrite });
         });
     }
 
-    protected async throwIfWriteFileIsNotAllowed(uri: vscode.Uri, options: {create: boolean, overwrite: boolean}) {
+    protected async throwIfWriteFileIsNotAllowed(uri: vscode.Uri, options: { create: boolean, overwrite: boolean }) {
         try {
             let stat = await this.stat(uri);
             if (stat.type === vscode.FileType.Directory) {
