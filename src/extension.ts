@@ -6,7 +6,7 @@ import * as axios from 'axios';
 const log = (message: string): void => outputChannel.appendLine(message);
 let outputChannel: vscode.OutputChannel;
 
-const IS_WINDOWS = process.platform === "win32";
+export let IS_WINDOWS = process.platform === "win32";
 let sspiClient: any = undefined;
 let sspiAdapter: (config: axios.AxiosRequestConfig) => Promise<axios.AxiosResponse>;
 
@@ -73,8 +73,8 @@ export function validationErrorsForUri(value: string): string | undefined {
 
 export async function resetAuth() {
     let uris = (vscode.workspace.workspaceFolders || []).map(f => f.uri.toString()).filter(u => u.startsWith("webdav"));
-    if (uris) {
-        let uri = uris.length === 1 ? uris[0] : await vscode.window.showQuickPick(uris, { placeHolder: "Which WebDAV to Authenticate to?" });
+    if (uris.length) {
+        let uri = uris.length === 1 ? uris[0] : (await vscode.window.showQuickPick(uris, { placeHolder: "Which WebDAV to Authenticate to?" }));
         if (uri) {
             await configureAuthForUri(toBaseUri(vscode.Uri.parse(uri)));
         }
@@ -163,7 +163,9 @@ export async function configureAuthForUri(uriKey: string): Promise<void> {
         authOptions.push("Windows (SSPI)");
     }
 
-    let settings: AuthSettings = { auth: await vscode.window.showQuickPick(authOptions, { placeHolder: `Choose authentication for ${uriKey}` }) as WebDAVAuthType };
+    let settings: AuthSettings = { 
+        auth: await vscode.window.showQuickPick(authOptions, { placeHolder: `Choose authentication for ${uriKey}` }) as WebDAVAuthType 
+    };
     if (settings.auth === "Basic" || settings.auth === "Digest") {
         settings.user = await vscode.window.showInputBox({ prompt: "Username", placeHolder: `Username for login to ${uriKey}` });
         let pass = await vscode.window.showInputBox({ prompt: "Password", password: true, placeHolder: `Password for ${settings.user}` }) || "";
